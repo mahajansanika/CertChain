@@ -435,8 +435,8 @@
                     <h3 style="color: #667eea; margin-bottom: 15px;">🚀 Quick Setup (Day 1)</h3>
                     <p><strong>1. Smart Contract Deployment:</strong></p>
                     <ul style="margin: 10px 0 20px 20px;">
-                        <li>Deploy the provided Solidity contract to Polygon Mumbai Testnet</li>
-                        <li>Get free MATIC tokens from Mumbai faucet</li>
+                        <li>Deploy the provided Solidity contract to Polygon Amoy Testnet</li>
+                        <li>Get free MATIC tokens from Amoy faucet</li>
                         <li>Copy contract address after deployment</li>
                     </ul>
 
@@ -444,7 +444,7 @@
                     <ul style="margin: 10px 0 20px 20px;">
                         <li>This webapp is ready to use - just update the contract address</li>
                         <li>Install MetaMask browser extension</li>
-                        <li>Add Polygon Mumbai network to MetaMask</li>
+                        <li>Add Polygon Amoy network to MetaMask</li>
                     </ul>
 
                     <h3 style="color: #667eea; margin: 30px 0 15px 0;">🔧 Technical Implementation (Day 2)</h3>
@@ -488,7 +488,7 @@
                     <div style="background: #e8f4fd; padding: 20px; border-radius: 12px; margin-top: 30px;">
                         <h4 style="color: #1976d2; margin-bottom: 10px;">💡 Pro Tips:</h4>
                         <ul style="margin-left: 20px;">
-                            <li>Use Polygon Mumbai for zero transaction costs</li>
+                            <li>Use Polygon Amoy for zero transaction costs</li>
                             <li>The QR code can be embedded in the certificate PDF</li>
                             <li>Each certificate gets a unique blockchain record</li>
                             <li>Verification works without needing the original issuer</li>
@@ -506,7 +506,12 @@
             chainId: '0x13882', // Polygon Amoy testnet
             chainName: 'Polygon Amoy Testnet',
             rpcUrl: 'https://rpc-amoy.polygon.technology',
-            explorerUrl: 'https://amoy.polygonscan.com'
+            explorerUrl: 'https://amoy.polygonscan.com',
+            nativeCurrency: {
+                name: 'MATIC',
+                symbol: 'MATIC',
+                decimals: 18
+            }
         };
         const CONTRACT_ABI = [
             {
@@ -580,10 +585,10 @@
                     connectedAccount = accounts[0];
                     updateWalletUI();
                     
-                    // Check if on correct network
-                    const expectedChainId = '0x13881'; // Mumbai testnet
+                    // Check if on correct network (Amoy testnet)
+                    const expectedChainId = NETWORK_CONFIG.chainId;
                     if (chainId !== expectedChainId) {
-                        const switchResult = confirm('You need to switch to Mumbai testnet. Click OK to switch automatically, or Cancel to switch manually in MetaMask.');
+                        const switchResult = confirm('You need to switch to Polygon Amoy testnet. Click OK to switch automatically, or Cancel to switch manually in MetaMask.');
                         if (switchResult) {
                             try {
                                 await ethereum.request({
@@ -597,20 +602,16 @@
                                         method: 'wallet_addEthereumChain',
                                         params: [{
                                             chainId: expectedChainId,
-                                            chainName: 'Mumbai Testnet',
-                                            rpcUrls: ['https://polygon-mumbai.g.alchemy.com/v2/demo'],
-                                            nativeCurrency: {
-                                                name: 'MATIC',
-                                                symbol: 'MATIC',
-                                                decimals: 18
-                                            },
-                                            blockExplorerUrls: ['https://mumbai.polygonscan.com']
+                                            chainName: NETWORK_CONFIG.chainName,
+                                            rpcUrls: [NETWORK_CONFIG.rpcUrl],
+                                            nativeCurrency: NETWORK_CONFIG.nativeCurrency,
+                                            blockExplorerUrls: [NETWORK_CONFIG.explorerUrl]
                                         }]
                                     });
                                 }
                             }
                         } else {
-                            alert('Please manually switch to Mumbai testnet in MetaMask and try again.');
+                            alert('Please manually switch to Polygon Amoy testnet in MetaMask and try again.');
                             return;
                         }
                     }
@@ -626,7 +627,15 @@
                         errorMessage += error.message;
                     }
                     
-                    showResult('issue-result', errorMessage, 'error');
+                    document.getElementById('issue-result').innerHTML = `
+                        <div class="result-card result-error">
+                            <div class="status-indicator">
+                                <span class="status-icon status-invalid">✗</span>
+                                Connection Error
+                            </div>
+                            <p>${errorMessage}</p>
+                        </div>
+                    `;
                 }
             } else {
                 alert('MetaMask is not installed. Please install MetaMask browser extension to use this application.');
@@ -750,7 +759,15 @@
                 
             } catch (error) {
                 console.error('Error issuing certificate:', error);
-                showResult('issue-result', 'Error issuing certificate: ' + error.message, 'error');
+                document.getElementById('issue-result').innerHTML = `
+                    <div class="result-card result-error">
+                        <div class="status-indicator">
+                            <span class="status-icon status-invalid">✗</span>
+                            Error Issuing Certificate
+                        </div>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
             } finally {
                 issueBtn.disabled = false;
                 issueBtn.innerHTML = 'Issue Certificate on Blockchain';
@@ -780,35 +797,6 @@
                 const [exists, recipientName, issuerName, issueDate] = await contract.verifyCertificate(fileHash);
                 
                 if (exists) {
-                    const resultHtml = `
-                        <div class="result-card result-success">
-                            <div class="status-indicator">
-                                <span class="status-icon status-verified">✓</span>
-                                Certificate Verified Successfully!
-                            </div>
-                            <div class="verification-details">
-                                <h3>Certificate Details</h3>
-                                <div class="detail-row">
-                                    <span class="detail-label">Recipient:</span>
-                                    <span>${recipientName}</span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="detail-label">Issuer:</span>
-                                    <span>${issuerName}</span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="detail-label">Issue Date:</span>
-                                    <span>${issueDate}</span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="detail-label">Status:</span>
-                                    <span style="color: #4caf50; font-weight: bold;">AUTHENTIC</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    showResult('verify-result', resultHtml, 'success');
-                } else {
                     const resultHtml = `
                         <div class="result-card result-error">
                             <div class="status-indicator">
@@ -852,3 +840,32 @@
     </script>
 </body>
 </html>
+                        <div class="result-card result-success">
+                            <div class="status-indicator">
+                                <span class="status-icon status-verified">✓</span>
+                                Certificate Verified Successfully!
+                            </div>
+                            <div class="verification-details">
+                                <h3>Certificate Details</h3>
+                                <div class="detail-row">
+                                    <span class="detail-label">Recipient:</span>
+                                    <span>${recipientName}</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">Issuer:</span>
+                                    <span>${issuerName}</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">Issue Date:</span>
+                                    <span>${issueDate}</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">Status:</span>
+                                    <span style="color: #4caf50; font-weight: bold;">AUTHENTIC</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    showResult('verify-result', resultHtml, 'success');
+                } else {
+                    const resultHtml = `
