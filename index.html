@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CertChain - Blockchain Certificate Verification</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-tab {
+            background: none;
+            border: none;
+            padding: 15px 30px;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-tab.active {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .nav-tab:hover:not(.active) {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .card {
+            background: rgba(255,255,255,0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 20px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 0.95rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-input-label {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .file-input-label:hover {
+            background: #e3f2fd;
+            border-color: #5a6fd8;
+        }
+
+        .file-selected {
+            border-color: #4caf50 !important;
+            background: #e8f5e8 !important;
+            color: #2e7d2e !important;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-full {
+            width: 100%;
+        }
+
+        .result-card {
+            margin-top: 25px;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .result-success {
+            background: linear-gradient(135deg, #4caf50, #45a049);
+            color: white;
+        }
+
+        .result-error {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+        }
+
+        .result-warning {
+            background: linear-gradient(135deg, #ff9800, #f57c00);
+            color: white;
+        }
+
+        .qr-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .qr-code {
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .verification-details {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .verification-details h3 {
+            margin-bottom: 15px;
+            color: white;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            color: rgba(255,255,255,0.9);
+        }
+
+        .detail-label {
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .status-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .status-verified {
+            background: #4caf50;
+        }
+
+        .status-invalid {
+            background: #f44336;
+        }
+
+        .connect-wallet {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .wallet-status {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .hash-display {
+            font-family: 'Courier New', monospace;
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 8px;
+            word-break: break-all;
+            font-size: 0.9rem;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .card {
+                padding: 25px;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .nav-tab {
+                padding: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CertChain</h1>
+            <p>Blockchain-Based Certificate Verification System</p>
+        </div>
+
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="switchTab('issue')">Issue Certificate</button>
+            <button class="nav-tab" onclick="switchTab('verify')">Verify Certificate</button>
+            <button class="nav-tab" onclick="switchTab('guide')">Step-by-Step Guide</button>
+        </div>
+
+        <!-- Issue Certificate Tab -->
+        <div id="issue-tab" class="tab-content active">
+            <div class="card">
+                <h2 style="margin-bottom: 30px; color: #333; text-align: center;">Issue New Certificate</h2>
+                
+                <div id="wallet-section">
+                    <div class="wallet-status" id="wallet-status">
+                        <strong>Wallet Status:</strong> <span id="wallet-address">Not Connected</span>
+                    </div>
+                    <button class="btn btn-full" id="connect-wallet-btn" onclick="connectWallet()">
+                        <span id="connect-btn-text">Connect MetaMask Wallet</span>
+                    </button>
+                </div>
+
+                <div id="issue-form" style="display: none;">
+                    <form id="certificateForm">
+                        <div class="form-group">
+                            <label>Certificate File (PDF/Image)</label>
+                            <div class="file-input-wrapper">
+                                <input type="file" id="certificate-file" class="file-input" accept=".pdf,.jpg,.jpeg,.png" required>
+                                <label for="certificate-file" class="file-input-label" id="file-label">
+                                    📄 Click to upload certificate file
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Recipient Name</label>
+                            <input type="text" id="recipient-name" placeholder="John Doe" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Issuer Name</label>
+                            <input type="text" id="issuer-name" placeholder="ABC University" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Issue Date</label>
+                            <input type="date" id="issue-date" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-full" id="issue-btn">
+                            Issue Certificate on Blockchain
+                        </button>
+                    </form>
+
+                    <div id="issue-result"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verify Certificate Tab -->
+        <div id="verify-tab" class="tab-content">
+            <div class="card">
+                <h2 style="margin-bottom: 30px; color: #333; text-align: center;">Verify Certificate</h2>
+                
+                <form id="verifyForm">
+                    <div class="form-group">
+                        <label>Upload Certificate to Verify</label>
+                        <div class="file-input-wrapper">
+                            <input type="file" id="verify-file" class="file-input" accept=".pdf,.jpg,.jpeg,.png" required>
+                            <label for="verify-file" class="file-input-label" id="verify-file-label">
+                                📄 Click to upload certificate file
+                            </label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-full">
+                        Verify Certificate
+                    </button>
+                </form>
+
+                <div id="verify-result"></div>
+            </div>
+        </div>
+
+        <!-- Guide Tab -->
+        <div id="guide-tab" class="tab-content">
+            <div class="card">
+                <h2 style="margin-bottom: 30px; color: #333; text-align: center;">Step-by-Step Implementation Guide</h2>
+                
+                <div style="line-height: 1.8; color: #555;">
+                    <h3 style="color: #667eea; margin-bottom: 15px;">🚀 Quick Setup (Day 1)</h3>
+                    <p><strong>1. Smart Contract Deployment:</strong></p>
+                    <ul style="margin: 10px 0 20px 20px;">
+                        <li>Deploy the provided Solidity contract to Polygon Mumbai Testnet</li>
+                        <li>Get free MATIC tokens from Mumbai faucet</li>
+                        <li>Copy contract address after deployment</li>
+                    </ul>
+
+                    <p><strong>2. Frontend Integration:</strong></p>
+                    <ul style="margin: 10px 0 20px 20px;">
+                        <li>This webapp is ready to use - just update the contract address</li>
+                        <li>Install MetaMask browser extension</li>
+                        <li>Add Polygon Mumbai network to MetaMask</li>
+                    </ul>
+
+                    <h3 style="color: #667eea; margin: 30px 0 15px 0;">🔧 Technical Implementation (Day 2)</h3>
+                    <p><strong>3. Core Features Implemented:</strong></p>
+                    <ul style="margin: 10px 0 20px 20px;">
+                        <li>✅ File hashing using SHA-256</li>
+                        <li>✅ Blockchain interaction with ethers.js</li>
+                        <li>✅ QR code generation for certificates</li>
+                        <li>✅ Instant verification system</li>
+                        <li>✅ Modern, responsive UI</li>
+                    </ul>
+
+                    <h3 style="color: #667eea; margin: 30px 0 15px 0;">📋 How to Use</h3>
+                    <p><strong>For Certificate Issuers:</strong></p>
+                    <ol style="margin: 10px 0 20px 20px;">
+                        <li>Connect your MetaMask wallet</li>
+                        <li>Upload the certificate file (PDF/Image)</li>
+                        <li>Fill in recipient details</li>
+                        <li>Click "Issue Certificate" - this stores the hash on blockchain</li>
+                        <li>Share the QR code with the certificate recipient</li>
+                    </ol>
+
+                    <p><strong>For Verification:</strong></p>
+                    <ol style="margin: 10px 0 20px 20px;">
+                        <li>Upload the certificate file you want to verify</li>
+                        <li>Click "Verify Certificate"</li>
+                        <li>System checks if the file hash exists on blockchain</li>
+                        <li>Get instant verification results</li>
+                    </ol>
+
+                    <h3 style="color: #667eea; margin: 30px 0 15px 0;">🎯 Demo Strategy</h3>
+                    <p><strong>Perfect for showcasing:</strong></p>
+                    <ul style="margin: 10px 0 20px 20px;">
+                        <li>Issue a sample certificate live during demo</li>
+                        <li>Show the blockchain transaction hash</li>
+                        <li>Demonstrate instant verification</li>
+                        <li>Explain how this prevents certificate fraud</li>
+                        <li>Show the modern, professional UI</li>
+                    </ul>
+
+                    <div style="background: #e8f4fd; padding: 20px; border-radius: 12px; margin-top: 30px;">
+                        <h4 style="color: #1976d2; margin-bottom: 10px;">💡 Pro Tips:</h4>
+                        <ul style="margin-left: 20px;">
+                            <li>Use Polygon Mumbai for zero transaction costs</li>
+                            <li>The QR code can be embedded in the certificate PDF</li>
+                            <li>Each certificate gets a unique blockchain record</li>
+                            <li>Verification works without needing the original issuer</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Contract configuration - Update this with your deployed contract address
+        const CONTRACT_ADDRESS = "0x742d35Cc6634C0532925a3b8d3e4De3E3F4e6a5B"; // Replace with your contract address
+        const NETWORK_CONFIG = {
+            chainId: '0x13882', // Polygon Amoy testnet
+            chainName: 'Polygon Amoy Testnet',
+            rpcUrl: 'https://rpc-amoy.polygon.technology',
+            explorerUrl: 'https://amoy.polygonscan.com'
+        };
+        const CONTRACT_ABI = [
+            {
+                "inputs": [
+                    {"type": "bytes32", "name": "certHash"},
+                    {"type": "string", "name": "recipientName"},
+                    {"type": "string", "name": "issuerName"},
+                    {"type": "string", "name": "issueDate"}
+                ],
+                "name": "issueCertificate",
+                "outputs": [],
+                "type": "function"
+            },
+            {
+                "inputs": [{"type": "bytes32", "name": "certHash"}],
+                "name": "verifyCertificate",
+                "outputs": [
+                    {"type": "bool", "name": ""},
+                    {"type": "string", "name": ""},
+                    {"type": "string", "name": ""},
+                    {"type": "string", "name": ""}
+                ],
+                "type": "function"
+            }
+        ];
+
+        let provider, signer, contract;
+        let connectedAccount = null;
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Connect to MetaMask
+        async function connectWallet() {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    // First, request accounts
+                    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+                    
+                    // Add delay to let MetaMask initialize
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Try to get network info first
+                    let chainId;
+                    try {
+                        chainId = await ethereum.request({ method: 'eth_chainId' });
+                        console.log('Connected to chain ID:', chainId);
+                    } catch (chainError) {
+                        console.error('Could not fetch chain ID:', chainError);
+                        alert('Error: Could not connect to blockchain network. Please check your MetaMask connection and try again.');
+                        return;
+                    }
+                    
+                    // Create provider and signer
+                    provider = new ethers.BrowserProvider(window.ethereum);
+                    signer = await provider.getSigner();
+                    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+                    
+                    connectedAccount = accounts[0];
+                    updateWalletUI();
+                    
+                    // Check if on correct network
+                    const expectedChainId = '0x13881'; // Mumbai testnet
+                    if (chainId !== expectedChainId) {
+                        const switchResult = confirm('You need to switch to Mumbai testnet. Click OK to switch automatically, or Cancel to switch manually in MetaMask.');
+                        if (switchResult) {
+                            try {
+                                await ethereum.request({
+                                    method: 'wallet_switchEthereumChain',
+                                    params: [{ chainId: expectedChainId }],
+                                });
+                            } catch (switchError) {
+                                if (switchError.code === 4902) {
+                                    // Network not added, let's add it
+                                    await ethereum.request({
+                                        method: 'wallet_addEthereumChain',
+                                        params: [{
+                                            chainId: expectedChainId,
+                                            chainName: 'Mumbai Testnet',
+                                            rpcUrls: ['https://polygon-mumbai.g.alchemy.com/v2/demo'],
+                                            nativeCurrency: {
+                                                name: 'MATIC',
+                                                symbol: 'MATIC',
+                                                decimals: 18
+                                            },
+                                            blockExplorerUrls: ['https://mumbai.polygonscan.com']
+                                        }]
+                                    });
+                                }
+                            }
+                        } else {
+                            alert('Please manually switch to Mumbai testnet in MetaMask and try again.');
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to connect wallet:', error);
+                    let errorMessage = 'Error connecting wallet: ';
+                    
+                    if (error.message.includes('User rejected')) {
+                        errorMessage += 'Connection cancelled by user.';
+                    } else if (error.message.includes('chain')) {
+                        errorMessage += 'Network connection issue. Please check MetaMask network settings.';
+                    } else {
+                        errorMessage += error.message;
+                    }
+                    
+                    showResult('issue-result', errorMessage, 'error');
+                }
+            } else {
+                alert('MetaMask is not installed. Please install MetaMask browser extension to use this application.');
+            }
+        }
+
+        function updateWalletUI() {
+            if (connectedAccount) {
+                document.getElementById('wallet-address').textContent = 
+                    connectedAccount.slice(0, 6) + '...' + connectedAccount.slice(-4);
+                document.getElementById('connect-wallet-btn').style.display = 'none';
+                document.getElementById('issue-form').style.display = 'block';
+            }
+        }
+
+        // File handling
+        document.getElementById('certificate-file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('file-label').textContent = `✅ ${file.name}`;
+                document.getElementById('file-label').classList.add('file-selected');
+            }
+        });
+
+        document.getElementById('verify-file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('verify-file-label').textContent = `✅ ${file.name}`;
+                document.getElementById('verify-file-label').classList.add('file-selected');
+            }
+        });
+
+        // Generate file hash
+        function generateFileHash(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const wordArray = CryptoJS.lib.WordArray.create(e.target.result);
+                    const hash = CryptoJS.SHA256(wordArray);
+                    resolve('0x' + hash.toString());
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // Issue certificate
+        document.getElementById('certificateForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!connectedAccount) {
+                alert('Please connect your wallet first');
+                return;
+            }
+
+            const fileInput = document.getElementById('certificate-file');
+            const recipientName = document.getElementById('recipient-name').value;
+            const issuerName = document.getElementById('issuer-name').value;
+            const issueDate = document.getElementById('issue-date').value;
+            
+            if (!fileInput.files[0]) {
+                alert('Please select a certificate file');
+                return;
+            }
+
+            const issueBtn = document.getElementById('issue-btn');
+            issueBtn.disabled = true;
+            issueBtn.innerHTML = '<span class="loading"></span> Issuing Certificate...';
+
+            try {
+                // Generate hash
+                const fileHash = await generateFileHash(fileInput.files[0]);
+                
+                // Issue certificate on blockchain
+                const tx = await contract.issueCertificate(fileHash, recipientName, issuerName, issueDate);
+                const receipt = await tx.wait();
+                
+                // Generate QR code for verification
+                const verifyUrl = `${window.location.origin}${window.location.pathname}#verify-${fileHash}`;
+                const qrCanvas = document.createElement('canvas');
+                await QRCode.toCanvas(qrCanvas, verifyUrl, { width: 200 });
+                
+                const resultHtml = `
+                    <div class="result-card result-success">
+                        <div class="status-indicator">
+                            <span class="status-icon status-verified">✓</span>
+                            Certificate Successfully Issued!
+                        </div>
+                        <div class="verification-details">
+                            <h3>Certificate Details</h3>
+                            <div class="detail-row">
+                                <span class="detail-label">Recipient:</span>
+                                <span>${recipientName}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Issuer:</span>
+                                <span>${issuerName}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Date:</span>
+                                <span>${issueDate}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Transaction:</span>
+                                <span style="font-size: 0.9rem;">${receipt.hash}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">File Hash:</span>
+                                <span class="hash-display">${fileHash}</span>
+                            </div>
+                        </div>
+                        <div class="qr-container">
+                            <h4>QR Code for Verification</h4>
+                            <div class="qr-code"></div>
+                            <p>Share this QR code with the certificate for instant verification</p>
+                        </div>
+                    </div>
+                `;
+                
+                showResult('issue-result', resultHtml, 'success');
+                document.querySelector('#issue-result .qr-code').appendChild(qrCanvas);
+                
+            } catch (error) {
+                console.error('Error issuing certificate:', error);
+                showResult('issue-result', 'Error issuing certificate: ' + error.message, 'error');
+            } finally {
+                issueBtn.disabled = false;
+                issueBtn.innerHTML = 'Issue Certificate on Blockchain';
+            }
+        });
+
+        // Verify certificate
+        document.getElementById('verifyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('verify-file');
+            if (!fileInput.files[0]) {
+                alert('Please select a certificate file to verify');
+                return;
+            }
+
+            try {
+                // Initialize provider for read-only operations
+                if (!provider) {
+                    provider = new ethers.JsonRpcProvider(NETWORK_CONFIG.rpcUrl);
+                    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+                }
+
+                const fileHash = await generateFileHash(fileInput.files[0]);
+                
+                // Verify on blockchain
+                const [exists, recipientName, issuerName, issueDate] = await contract.verifyCertificate(fileHash);
+                
+                if (exists) {
+                    const resultHtml = `
+                        <div class="result-card result-success">
+                            <div class="status-indicator">
+                                <span class="status-icon status-verified">✓</span>
+                                Certificate Verified Successfully!
+                            </div>
+                            <div class="verification-details">
+                                <h3>Certificate Details</h3>
+                                <div class="detail-row">
+                                    <span class="detail-label">Recipient:</span>
+                                    <span>${recipientName}</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">Issuer:</span>
+                                    <span>${issuerName}</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">Issue Date:</span>
+                                    <span>${issueDate}</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">Status:</span>
+                                    <span style="color: #4caf50; font-weight: bold;">AUTHENTIC</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    showResult('verify-result', resultHtml, 'success');
+                } else {
+                    const resultHtml = `
+                        <div class="result-card result-error">
+                            <div class="status-indicator">
+                                <span class="status-icon status-invalid">✗</span>
+                                Certificate Not Found
+                            </div>
+                            <p>This certificate could not be verified on the blockchain. It may be:</p>
+                            <ul style="text-align: left; margin: 15px 0;">
+                                <li>Not issued through this system</li>
+                                <li>Modified after issuance</li>
+                                <li>A fraudulent document</li>
+                            </ul>
+                        </div>
+                    `;
+                    showResult('verify-result', resultHtml, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error verifying certificate:', error);
+                showResult('verify-result', 'Error verifying certificate: ' + error.message, 'error');
+            }
+        });
+
+        function showResult(containerId, content, type) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = content;
+        }
+
+        // Initialize date field with today's date
+        document.getElementById('issue-date').valueAsDate = new Date();
+
+        // Check for verification hash in URL on page load
+        window.addEventListener('load', function() {
+            if (window.location.hash.startsWith('#verify-')) {
+                switchTab('verify');
+                // Auto-fill hash if needed for QR code verification
+                const hash = window.location.hash.substring(8);
+                console.log('Verification hash from QR:', hash);
+            }
+        });
+    </script>
+</body>
+</html>
