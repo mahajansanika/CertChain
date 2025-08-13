@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CertChain - Blockchain Certificate Verification</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
         * {
@@ -704,8 +704,21 @@
                 
                 // Generate QR code for verification
                 const verifyUrl = `${window.location.origin}${window.location.pathname}#verify-${fileHash}`;
-                const qrCanvas = document.createElement('canvas');
-                await QRCode.toCanvas(qrCanvas, verifyUrl, { width: 200 });
+                
+                let qrCanvas;
+                try {
+                    qrCanvas = document.createElement('canvas');
+                    if (typeof QRCode !== 'undefined') {
+                        await QRCode.toCanvas(qrCanvas, verifyUrl, { width: 200 });
+                    } else {
+                        // Fallback: create a simple text display if QRCode library fails
+                        console.warn('QRCode library not loaded, using text fallback');
+                        qrCanvas = null;
+                    }
+                } catch (qrError) {
+                    console.error('QR Code generation failed:', qrError);
+                    qrCanvas = null;
+                }
                 
                 const resultHtml = `
                     <div class="result-card result-success">
@@ -738,14 +751,25 @@
                         </div>
                         <div class="qr-container">
                             <h4>QR Code for Verification</h4>
-                            <div class="qr-code"></div>
+                            <div class="qr-code" id="qr-placeholder"></div>
                             <p>Share this QR code with the certificate for instant verification</p>
+                            <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-top: 10px;">
+                                <strong>Verification URL:</strong><br>
+                                <span style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">${verifyUrl}</span>
+                            </div>
                         </div>
                     </div>
                 `;
                 
                 showResult('issue-result', resultHtml, 'success');
-                document.querySelector('#issue-result .qr-code').appendChild(qrCanvas);
+                
+                // Add QR code if generation was successful
+                const qrContainer = document.querySelector('#issue-result #qr-placeholder');
+                if (qrCanvas && qrContainer) {
+                    qrContainer.appendChild(qrCanvas);
+                } else if (qrContainer) {
+                    qrContainer.innerHTML = '<p style="color: rgba(255,255,255,0.8); font-style: italic;">QR Code generation failed - use the URL above for verification</p>';
+                }
                 
             } catch (error) {
                 console.error('Error issuing certificate:', error);
@@ -851,4 +875,3 @@
     </script>
 </body>
 </html>
-                            
