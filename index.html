@@ -504,8 +504,8 @@
         let contract = null;
         let connectedAccount = null;
 
-        // Contract configuration - Your deployed contract address
-        const CONTRACT_ADDRESS = "0xcB69d662E6B122c773a43EEE79307300AEF85375";
+        // Contract configuration - Your deployed contract address (properly checksummed)
+        const CONTRACT_ADDRESS = ethers.getAddress("0xcb69d662e6b122c773a43eee79307300aef85375");
         const NETWORK_CONFIG = {
             chainId: '0x13882', // Polygon Amoy testnet
             chainName: 'Polygon Amoy Testnet',
