@@ -498,8 +498,14 @@
     </div>
 
     <script>
-        // Contract configuration - Update this with your deployed contract address
-        const CONTRACT_ADDRESS = ethers.getAddress("0xcB69d662E6B122c773a43EEE79307300AEF85375"); // Replace with your contract address
+        // Global variables - Initialize properly
+        let provider = null;
+        let signer = null;
+        let contract = null;
+        let connectedAccount = null;
+
+        // Contract configuration - Your deployed contract address
+        const CONTRACT_ADDRESS = "0xcB69d662E6B122c773a43EEE79307300AEF85375";
         const NETWORK_CONFIG = {
             chainId: '0x13882', // Polygon Amoy testnet
             chainName: 'Polygon Amoy Testnet',
@@ -511,6 +517,7 @@
                 decimals: 18
             }
         };
+        
         const CONTRACT_ABI = [
             {
                 "inputs": [
@@ -521,6 +528,7 @@
                 ],
                 "name": "issueCertificate",
                 "outputs": [],
+                "stateMutability": "nonpayable",
                 "type": "function"
             },
             {
@@ -532,12 +540,33 @@
                     {"type": "string", "name": ""},
                     {"type": "string", "name": ""}
                 ],
+                "stateMutability": "view",
                 "type": "function"
+            },
+            {
+                "inputs": [{"type": "bytes32", "name": ""}],
+                "name": "certificates",
+                "outputs": [
+                    {"type": "string", "name": "recipientName"},
+                    {"type": "string", "name": "issuerName"},
+                    {"type": "string", "name": "issueDate"},
+                    {"type": "bool", "name": "exists"}
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {"indexed": true, "type": "bytes32", "name": "certHash"},
+                    {"indexed": false, "type": "string", "name": "recipientName"},
+                    {"indexed": false, "type": "string", "name": "issuerName"},
+                    {"indexed": false, "type": "string", "name": "issueDate"}
+                ],
+                "name": "CertificateIssued",
+                "type": "event"
             }
         ];
-
-        let provider, signer, contract;
-        let connectedAccount = null;
 
         // Tab switching
         function switchTab(tabName) {
@@ -556,79 +585,81 @@
 
         // Connect to MetaMask
         async function connectWallet() {
-            if (typeof window.ethereum !== 'undefined') {
-                try {
-                    // First, request accounts
-                    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-                    
-                    // Add delay to let MetaMask initialize
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    
-                    // Try to get network info first
-                    let chainId;
-                    try {
-                        chainId = await ethereum.request({ method: 'eth_chainId' });
-                        console.log('Connected to chain ID:', chainId);
-                    } catch (chainError) {
-                        console.error('Could not fetch chain ID:', chainError);
-                        alert('Error: Could not connect to blockchain network. Please check your MetaMask connection and try again.');
-                        return;
-                    }
-                    
-                    // Create provider and signer
-                    provider = new ethers.BrowserProvider(window.ethereum);
-                    signer = await provider.getSigner();
-                    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-                    
-                    connectedAccount = accounts[0];
-                    updateWalletUI();
-                    
-                    // Check if on correct network (Amoy testnet)
-                    const expectedChainId = NETWORK_CONFIG.chainId;
-                    if (chainId !== expectedChainId) {
-                        const switchResult = confirm('You need to switch to Polygon Amoy testnet. Click OK to switch automatically, or Cancel to switch manually in MetaMask.');
-                        if (switchResult) {
-                            try {
-                                await ethereum.request({
-                                    method: 'wallet_switchEthereumChain',
-                                    params: [{ chainId: expectedChainId }],
-                                });
-                            } catch (switchError) {
-                                if (switchError.code === 4902) {
-                                    // Network not added, let's add it
-                                    await ethereum.request({
-                                        method: 'wallet_addEthereumChain',
-                                        params: [{
-                                            chainId: expectedChainId,
-                                            chainName: NETWORK_CONFIG.chainName,
-                                            rpcUrls: [NETWORK_CONFIG.rpcUrl],
-                                            nativeCurrency: NETWORK_CONFIG.nativeCurrency,
-                                            blockExplorerUrls: [NETWORK_CONFIG.explorerUrl]
-                                        }]
-                                    });
-                                }
-                            }
-                        } else {
-                            alert('Please manually switch to Polygon Amoy testnet in MetaMask and try again.');
-                            return;
-                        }
-                    }
-                } catch (error) {
-                    console.error('Failed to connect wallet:', error);
-                    let errorMessage = 'Error connecting wallet: ';
-                    
-                    if (error.message.includes('User rejected')) {
-                        errorMessage += 'Connection cancelled by user.';
-                    } else if (error.message.includes('chain')) {
-                        errorMessage += 'Network connection issue. Please check MetaMask network settings.';
-                    } else {
-                        errorMessage += error.message;
-                    }
-                    
-                    showResult('issue-result', errorMessage, 'error');
+            try {
+                // Check if MetaMask is installed
+                if (typeof window.ethereum === 'undefined') {
+                    alert('MetaMask is not installed. Please install MetaMask browser extension to use this application.');
+                    return;
                 }
-            } else {
-                alert('MetaMask is not installed. Please install MetaMask browser extension to use this application.');
+
+                const connectBtn = document.getElementById('connect-wallet-btn');
+                connectBtn.disabled = true;
+                connectBtn.innerHTML = '<span class="loading"></span> Connecting...';
+
+                // Request account access
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                
+                if (!accounts || accounts.length === 0) {
+                    throw new Error('No accounts found. Please unlock MetaMask.');
+                }
+
+                // Initialize provider and signer
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+                
+                const address = await signer.getAddress();
+                const network = await provider.getNetwork();
+                
+                console.log('Connected to:', address);
+                console.log('Network:', network);
+                
+                // Check if on correct network (Amoy testnet)
+                const expectedChainId = parseInt(NETWORK_CONFIG.chainId, 16);
+                if (Number(network.chainId) !== expectedChainId) {
+                    const switchResult = confirm('You need to switch to Polygon Amoy testnet. Click OK to switch automatically.');
+                    if (switchResult) {
+                        try {
+                            await window.ethereum.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: NETWORK_CONFIG.chainId }],
+                            });
+                        } catch (switchError) {
+                            if (switchError.code === 4902) {
+                                // Network not added, let's add it
+                                await window.ethereum.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [{
+                                        chainId: NETWORK_CONFIG.chainId,
+                                        chainName: NETWORK_CONFIG.chainName,
+                                        rpcUrls: [NETWORK_CONFIG.rpcUrl],
+                                        nativeCurrency: NETWORK_CONFIG.nativeCurrency,
+                                        blockExplorerUrls: [NETWORK_CONFIG.explorerUrl]
+                                    }]
+                                });
+                            } else {
+                                throw switchError;
+                            }
+                        }
+                    } else {
+                        throw new Error('Please switch to Polygon Amoy testnet in MetaMask and try again.');
+                    }
+                }
+                
+                // Initialize contract
+                contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+                
+                connectedAccount = address;
+                updateWalletUI();
+                
+                showMessage('Wallet connected successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Failed to connect wallet:', error);
+                showMessage('Failed to connect wallet: ' + error.message, 'error');
+            } finally {
+                const connectBtn = document.getElementById('connect-wallet-btn');
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = 'Connect MetaMask Wallet';
             }
         }
 
@@ -675,18 +706,23 @@
         document.getElementById('certificateForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            if (!connectedAccount) {
-                alert('Please connect your wallet first');
+            if (!connectedAccount || !contract) {
+                showMessage('Please connect your wallet first', 'error');
                 return;
             }
 
             const fileInput = document.getElementById('certificate-file');
-            const recipientName = document.getElementById('recipient-name').value;
-            const issuerName = document.getElementById('issuer-name').value;
+            const recipientName = document.getElementById('recipient-name').value.trim();
+            const issuerName = document.getElementById('issuer-name').value.trim();
             const issueDate = document.getElementById('issue-date').value;
             
             if (!fileInput.files[0]) {
-                alert('Please select a certificate file');
+                showMessage('Please select a certificate file', 'error');
+                return;
+            }
+
+            if (!recipientName || !issuerName || !issueDate) {
+                showMessage('Please fill in all fields', 'error');
                 return;
             }
 
@@ -697,27 +733,26 @@
             try {
                 // Generate hash
                 const fileHash = await generateFileHash(fileInput.files[0]);
+                console.log('File hash:', fileHash);
                 
                 // Issue certificate on blockchain
                 const tx = await contract.issueCertificate(fileHash, recipientName, issuerName, issueDate);
+                console.log('Transaction sent:', tx.hash);
+                
                 const receipt = await tx.wait();
+                console.log('Transaction confirmed:', receipt);
                 
                 // Generate QR code for verification
                 const verifyUrl = `${window.location.origin}${window.location.pathname}#verify-${fileHash}`;
                 
-                let qrCanvas;
+                let qrCanvas = null;
                 try {
-                    qrCanvas = document.createElement('canvas');
                     if (typeof QRCode !== 'undefined') {
+                        qrCanvas = document.createElement('canvas');
                         await QRCode.toCanvas(qrCanvas, verifyUrl, { width: 200 });
-                    } else {
-                        // Fallback: create a simple text display if QRCode library fails
-                        console.warn('QRCode library not loaded, using text fallback');
-                        qrCanvas = null;
                     }
                 } catch (qrError) {
                     console.error('QR Code generation failed:', qrError);
-                    qrCanvas = null;
                 }
                 
                 const resultHtml = `
@@ -742,7 +777,7 @@
                             </div>
                             <div class="detail-row">
                                 <span class="detail-label">Transaction:</span>
-                                <span style="font-size: 0.9rem;">${receipt.hash}</span>
+                                <span style="font-size: 0.9rem;"><a href="${NETWORK_CONFIG.explorerUrl}/tx/${receipt.hash}" target="_blank" style="color: white;">${receipt.hash}</a></span>
                             </div>
                             <div class="detail-row">
                                 <span class="detail-label">File Hash:</span>
@@ -751,7 +786,7 @@
                         </div>
                         <div class="qr-container">
                             <h4>QR Code for Verification</h4>
-                            <div class="qr-code" id="qr-placeholder"></div>
+                            <div class="qr-code" id="qr-placeholder-issue"></div>
                             <p>Share this QR code with the certificate for instant verification</p>
                             <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-top: 10px;">
                                 <strong>Verification URL:</strong><br>
@@ -761,19 +796,36 @@
                     </div>
                 `;
                 
-                showResult('issue-result', resultHtml, 'success');
+                document.getElementById('issue-result').innerHTML = resultHtml;
                 
                 // Add QR code if generation was successful
-                const qrContainer = document.querySelector('#issue-result #qr-placeholder');
+                const qrContainer = document.querySelector('#qr-placeholder-issue');
                 if (qrCanvas && qrContainer) {
                     qrContainer.appendChild(qrCanvas);
                 } else if (qrContainer) {
                     qrContainer.innerHTML = '<p style="color: rgba(255,255,255,0.8); font-style: italic;">QR Code generation failed - use the URL above for verification</p>';
                 }
                 
+                // Reset form
+                document.getElementById('certificateForm').reset();
+                document.getElementById('file-label').textContent = '📄 Click to upload certificate file';
+                document.getElementById('file-label').classList.remove('file-selected');
+                
             } catch (error) {
                 console.error('Error issuing certificate:', error);
-                showResult('issue-result', 'Error issuing certificate: ' + error.message, 'error');
+                let errorMessage = 'Error issuing certificate: ';
+                
+                if (error.message.includes('user rejected')) {
+                    errorMessage += 'Transaction was cancelled by user.';
+                } else if (error.message.includes('insufficient funds')) {
+                    errorMessage += 'Insufficient MATIC tokens for gas fees.';
+                } else if (error.message.includes('already exists')) {
+                    errorMessage += 'This certificate has already been issued.';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                showMessage(errorMessage, 'error');
             } finally {
                 issueBtn.disabled = false;
                 issueBtn.innerHTML = 'Issue Certificate on Blockchain';
@@ -786,18 +838,23 @@
             
             const fileInput = document.getElementById('verify-file');
             if (!fileInput.files[0]) {
-                alert('Please select a certificate file to verify');
+                showMessage('Please select a certificate file to verify', 'error');
                 return;
             }
 
+            const verifyBtn = e.target.querySelector('button[type="submit"]');
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = '<span class="loading"></span> Verifying...';
+
             try {
-                // Initialize provider for read-only operations
+                // Initialize provider for read-only operations if not connected
                 if (!provider) {
                     provider = new ethers.JsonRpcProvider(NETWORK_CONFIG.rpcUrl);
                     contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
                 }
 
                 const fileHash = await generateFileHash(fileInput.files[0]);
+                console.log('Verifying hash:', fileHash);
                 
                 // Verify on blockchain
                 const [exists, recipientName, issuerName, issueDate] = await contract.verifyCertificate(fileHash);
@@ -827,10 +884,15 @@
                                     <span class="detail-label">Status:</span>
                                     <span style="color: #4caf50; font-weight: bold;">AUTHENTIC</span>
                                 </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">File Hash:</span>
+                                    <span class="hash-display">${fileHash}</span>
+                                </div>
                             </div>
+                            <p style="margin-top: 15px; opacity: 0.9;">This certificate is verified on the Polygon Amoy blockchain and is authentic.</p>
                         </div>
                     `;
-                    showResult('verify-result', resultHtml, 'success');
+                    document.getElementById('verify-result').innerHTML = resultHtml;
                 } else {
                     const resultHtml = `
                         <div class="result-card result-error">
@@ -839,39 +901,104 @@
                                 Certificate Not Found
                             </div>
                             <p>This certificate could not be verified on the blockchain. It may be:</p>
-                            <ul style="text-align: left; margin: 15px 0;">
+                            <ul style="text-align: left; margin: 15px 0; opacity: 0.9;">
                                 <li>Not issued through this system</li>
                                 <li>Modified after issuance</li>
                                 <li>A fraudulent document</li>
                             </ul>
+                            <div style="margin-top: 15px;">
+                                <strong>File Hash:</strong>
+                                <div class="hash-display">${fileHash}</div>
+                            </div>
                         </div>
                     `;
-                    showResult('verify-result', resultHtml, 'error');
+                    document.getElementById('verify-result').innerHTML = resultHtml;
                 }
                 
             } catch (error) {
                 console.error('Error verifying certificate:', error);
-                showResult('verify-result', 'Error verifying certificate: ' + error.message, 'error');
+                showMessage('Error verifying certificate: ' + error.message, 'error');
+            } finally {
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = 'Verify Certificate';
             }
         });
 
-        function showResult(containerId, content, type) {
-            const container = document.getElementById(containerId);
-            container.innerHTML = content;
+        function showMessage(message, type) {
+            // Create a temporary message element
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `result-card result-${type}`;
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.top = '20px';
+            messageDiv.style.right = '20px';
+            messageDiv.style.zIndex = '1000';
+            messageDiv.style.minWidth = '300px';
+            messageDiv.innerHTML = message;
+            
+            document.body.appendChild(messageDiv);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 5000);
         }
 
         // Initialize date field with today's date
-        document.getElementById('issue-date').valueAsDate = new Date();
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('issue-date').value = today;
+        });
 
         // Check for verification hash in URL on page load
         window.addEventListener('load', function() {
             if (window.location.hash.startsWith('#verify-')) {
-                switchTab('verify');
+                // Switch to verify tab
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.querySelectorAll('.nav-tab').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                document.getElementById('verify-tab').classList.add('active');
+                document.querySelector('[onclick="switchTab(\'verify\')"]').classList.add('active');
+                
                 // Auto-fill hash if needed for QR code verification
                 const hash = window.location.hash.substring(8);
                 console.log('Verification hash from QR:', hash);
+                
+                // You could auto-verify if you had the file, but since we only have the hash,
+                // we just switch to the verify tab for the user to upload the file
             }
         });
+
+        // Handle network changes
+        if (typeof window.ethereum !== 'undefined') {
+            window.ethereum.on('chainChanged', (chainId) => {
+                console.log('Network changed to:', chainId);
+                window.location.reload();
+            });
+            
+            window.ethereum.on('accountsChanged', (accounts) => {
+                console.log('Accounts changed:', accounts);
+                if (accounts.length === 0) {
+                    connectedAccount = null;
+                    provider = null;
+                    signer = null;
+                    contract = null;
+                    
+                    // Reset UI
+                    document.getElementById('wallet-address').textContent = 'Not Connected';
+                    document.getElementById('connect-wallet-btn').style.display = 'block';
+                    document.getElementById('issue-form').style.display = 'none';
+                } else {
+                    // Account changed, reconnect
+                    connectWallet();
+                }
+            });
+        }
     </script>
 </body>
 </html>
